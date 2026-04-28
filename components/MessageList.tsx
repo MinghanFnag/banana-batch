@@ -4,6 +4,8 @@ import { User, Sparkles, CheckCircle2, Circle, AlertTriangle, Loader2, ChevronDo
 import ImagePreviewModal from './ImagePreviewModal';
 import { getVisibleMessageImages, shouldShowImageExpansionToggle } from '../utils/messageImageDisplay';
 
+export const MESSAGE_LIST_CONTAINER_CLASS = 'flex-1 min-h-0 relative z-0 overflow-y-auto p-4 space-y-8 pb-32';
+
 interface MessageListProps {
   messages: Message[];
   isGenerating: boolean;
@@ -135,7 +137,7 @@ const MessageList: React.FC<MessageListProps> = ({ messages, isGenerating, progr
   );
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-8 pb-32">
+    <div className={MESSAGE_LIST_CONTAINER_CLASS}>
       <ImagePreviewModal
         isOpen={!!previewImage}
         src={previewImage?.src || ''}

@@ -20,6 +20,12 @@ const LEGACY_STORAGE_KEY = 'banana-batch-sessions';
 const LEGACY_CURRENT_SESSION_KEY = 'banana-batch-current-session';
 const META_CURRENT_SESSION_KEY = 'currentSessionId';
 
+export function shouldRefreshSessionsAfterStorageCleanup(
+  result: Pick<Awaited<ReturnType<typeof maybeCleanupStorage>>, 'deletedImageIds'>
+): boolean {
+  return result.deletedImageIds.length > 0;
+}
+
 function getLegacySessions(): Session[] {
   try {
     const stored = localStorage.getItem(LEGACY_STORAGE_KEY);
@@ -227,16 +233,18 @@ export function useSessionState() {
       cleanupInFlightRef.current = true;
 
       try {
-        await maybeCleanupStorage();
+        const cleanupResult = await maybeCleanupStorage();
 
-        const refreshedSessions = await getAllSessions();
-        if (refreshedSessions.length > 0) {
-          setState((prev) => ({
-            sessions: refreshedSessions,
-            currentSessionId: refreshedSessions.some((session) => session.id === prev.currentSessionId)
-              ? prev.currentSessionId
-              : refreshedSessions[0].id
-          }));
+        if (shouldRefreshSessionsAfterStorageCleanup(cleanupResult)) {
+          const refreshedSessions = await getAllSessions();
+          if (refreshedSessions.length > 0) {
+            setState((prev) => ({
+              sessions: refreshedSessions,
+              currentSessionId: refreshedSessions.some((session) => session.id === prev.currentSessionId)
+                ? prev.currentSessionId
+                : refreshedSessions[0].id
+            }));
+          }
         }
       } finally {
         cleanupInFlightRef.current = false;
@@ -425,15 +433,18 @@ export function useSessionState() {
     cleanupInFlightRef.current = true;
     try {
       const result = await maybeCleanupStorage();
-      const refreshedSessions = await getAllSessions();
 
-      if (refreshedSessions.length > 0) {
-        setState((prev) => ({
-          sessions: refreshedSessions,
-          currentSessionId: refreshedSessions.some((session) => session.id === prev.currentSessionId)
-            ? prev.currentSessionId
-            : refreshedSessions[0].id
-        }));
+      if (shouldRefreshSessionsAfterStorageCleanup(result)) {
+        const refreshedSessions = await getAllSessions();
+
+        if (refreshedSessions.length > 0) {
+          setState((prev) => ({
+            sessions: refreshedSessions,
+            currentSessionId: refreshedSessions.some((session) => session.id === prev.currentSessionId)
+              ? prev.currentSessionId
+              : refreshedSessions[0].id
+          }));
+        }
       }
 
       return result;

@@ -455,7 +455,7 @@ const App: React.FC = () => {
             />
 
             {/* Input Area (Sticky) */}
-            <div className="flex-none z-40">
+            <div className="relative z-40 flex-none">
               <InputArea
                 onSend={handleSend}
                 onStop={() => stopGeneration(currentSessionId)}
