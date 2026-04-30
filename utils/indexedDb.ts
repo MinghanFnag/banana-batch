@@ -621,19 +621,60 @@ export type AppStorageEstimate = {
   usageBytes: number;
   budgetBytes: number;
   usageRatio: number;
+  imageBytes: number;
+  browserUsageBytes: number;
   browserQuotaBytes: number;
 };
+
+export function calculateStorageEstimateFromParts({
+  imageBytes,
+  browserUsageBytes,
+  browserQuotaBytes,
+  budgetBytes = APP_CACHE_BUDGET_BYTES
+}: {
+  imageBytes: number;
+  browserUsageBytes: number;
+  browserQuotaBytes: number;
+  budgetBytes?: number;
+}): AppStorageEstimate {
+  const usageBytes = imageBytes;
+  const usageRatio = budgetBytes > 0 ? usageBytes / budgetBytes : 0;
+
+  return {
+    usageBytes,
+    budgetBytes,
+    usageRatio,
+    imageBytes,
+    browserUsageBytes,
+    browserQuotaBytes
+  };
+}
+
+async function estimateImageStorageBytes(): Promise<number> {
+  const db = await openDb();
+  try {
+    const tx = db.transaction(STORE_IMAGES, 'readonly');
+    const records = (await requestToPromise(tx.objectStore(STORE_IMAGES).getAll())) as ImageRecord[];
+    await transactionDone(tx);
+    return records.reduce((total, record) => total + (record.size || 0), 0);
+  } finally {
+    db.close();
+  }
+}
 
 async function estimateUsage(): Promise<AppStorageEstimate> {
   const browserEstimate = navigator.storage?.estimate
     ? await navigator.storage.estimate()
     : undefined;
-  const usageBytes = browserEstimate?.usage ?? 0;
+  const imageBytes = await estimateImageStorageBytes();
+  const browserUsageBytes = browserEstimate?.usage ?? 0;
   const browserQuotaBytes = browserEstimate?.quota ?? 0;
-  const budgetBytes = APP_CACHE_BUDGET_BYTES;
-  const usageRatio = budgetBytes > 0 ? usageBytes / budgetBytes : 0;
 
-  return { usageBytes, budgetBytes, usageRatio, browserQuotaBytes };
+  return calculateStorageEstimateFromParts({
+    imageBytes,
+    browserUsageBytes,
+    browserQuotaBytes
+  });
 }
 
 export async function getStorageEstimate() {

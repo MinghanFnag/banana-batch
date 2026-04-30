@@ -356,7 +356,7 @@ const App: React.FC = () => {
     refreshStorageUsage();
 
     if (result.mode === 'none') {
-      alert('当前缓存未达到清理条件，暂无可清理图片。');
+      alert('当前图片缓存未达到清理条件，暂无可清理图片。');
       return;
     }
 

@@ -51,7 +51,7 @@ function getLegacyCurrentSessionId(): string | null {
   return null;
 }
 
-function clearLegacyStorage(): void {
+export function clearLegacySessionLocalStorage(): void {
   try {
     localStorage.removeItem(LEGACY_STORAGE_KEY);
     localStorage.removeItem(LEGACY_CURRENT_SESSION_KEY);
@@ -292,6 +292,7 @@ export function useSessionState() {
             dbCurrentId && dbSessions.some((session) => session.id === dbCurrentId)
               ? dbCurrentId
               : dbSessions[0].id;
+          clearLegacySessionLocalStorage();
           prevSessionsRef.current = dbSessions;
           setState({ sessions: dbSessions, currentSessionId: nextId });
           hasHydratedRef.current = true;
@@ -309,7 +310,7 @@ export function useSessionState() {
           prevSessionsRef.current = legacySessions;
           setState({ sessions: legacySessions, currentSessionId: nextId });
           hasHydratedRef.current = true;
-          clearLegacyStorage();
+          clearLegacySessionLocalStorage();
 
           await Promise.all([
             ...legacySessions.map((session) => putSession(session)),

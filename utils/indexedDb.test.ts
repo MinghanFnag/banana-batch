@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  calculateStorageEstimateFromParts,
   createImageRecord,
   hydrateImageRecord,
   revokeAllHydratedImageObjectUrls,
@@ -168,5 +169,18 @@ describe('indexedDB image storage helpers', () => {
         new Set()
       )
     ).toBe(true);
+  });
+
+  it('reports app image storage separately from browser total storage', () => {
+    const estimate = calculateStorageEstimateFromParts({
+      imageBytes: 25 * 1024 * 1024,
+      browserUsageBytes: 220 * 1024 * 1024,
+      browserQuotaBytes: 1024 * 1024 * 1024
+    });
+
+    expect(estimate.usageBytes).toBe(25 * 1024 * 1024);
+    expect(estimate.imageBytes).toBe(25 * 1024 * 1024);
+    expect(estimate.browserUsageBytes).toBe(220 * 1024 * 1024);
+    expect(estimate.usageRatio).toBeCloseTo(0.05);
   });
 });

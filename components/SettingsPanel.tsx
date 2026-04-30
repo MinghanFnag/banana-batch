@@ -18,7 +18,14 @@ interface SettingsPanelProps {
   onCleanupCache?: () => void;
   hasMessages?: boolean;
   messages?: Message[];
-  storageUsage?: { usageBytes: number; budgetBytes: number; usageRatio: number; browserQuotaBytes: number } | null;
+  storageUsage?: {
+    usageBytes: number;
+    budgetBytes: number;
+    usageRatio: number;
+    imageBytes: number;
+    browserUsageBytes: number;
+    browserQuotaBytes: number;
+  } | null;
   onImportMessages?: (messages: Message[]) => void;
 }
 
@@ -354,12 +361,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       {storageUsage && storageUsage.budgetBytes > 0 && (
         <div className={`flex items-center space-x-2 border-r pr-4 text-xs ${
           isLight ? 'border-gray-300 text-gray-600' : 'border-zinc-700 text-zinc-400'
-        }`} title="浏览器存储占用情况">
+        }`} title={`图片缓存占用：${formatStorage(storageUsage.imageBytes)}。浏览器当前站点总占用：${formatStorage(storageUsage.browserUsageBytes)}。`}>
           <span>
-            缓存 {Math.round(storageUsage.usageRatio * 100)}%
+            图片缓存
           </span>
           <span>
-            {formatStorage(storageUsage.usageBytes)} / {formatStorage(storageUsage.budgetBytes)}
+            {formatStorage(storageUsage.imageBytes)}
           </span>
         </div>
       )}
