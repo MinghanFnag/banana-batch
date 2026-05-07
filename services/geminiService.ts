@@ -125,6 +125,32 @@ function appendKeyParam(url: string, apiKey: string): string {
   return `${url}${joiner}key=${encodeURIComponent(apiKey)}`;
 }
 
+function shouldRequestPngOutput(proxyBaseUrl: string): boolean {
+  return proxyBaseUrl.toLowerCase().includes('yunwu');
+}
+
+function shouldRetryWithoutOutputMimeType(
+  imageConfig: Record<string, unknown> | undefined,
+  errorText: string
+): boolean {
+  if (!imageConfig?.outputMimeType) {
+    return false;
+  }
+
+  return /outputMimeType|output_mime_type|unsupported|unknown/i.test(errorText);
+}
+
+function withoutOutputMimeType(
+  imageConfig: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined {
+  if (!imageConfig) {
+    return undefined;
+  }
+
+  const { outputMimeType: _outputMimeType, ...fallbackConfig } = imageConfig;
+  return fallbackConfig;
+}
+
 async function fetchGeminiGenerateContent(
   baseUrl: string,
   apiKey: string,
@@ -138,35 +164,65 @@ async function fetchGeminiGenerateContent(
     throw new ImageProcessingError('Gemini Base URL is missing.');
   }
 
-  const body: Record<string, unknown> = { contents };
-  if (imageConfig && Object.keys(imageConfig).length > 0) {
-    body.generationConfig = { imageConfig };
+  const fetchWithConfig = async (
+    activeImageConfig: Record<string, unknown> | undefined
+  ): Promise<{ data?: any; errorText?: string; status?: number; statusText?: string }> => {
+    const body: Record<string, unknown> = { contents };
+    if (activeImageConfig && Object.keys(activeImageConfig).length > 0) {
+      body.generationConfig = { imageConfig: activeImageConfig };
+    }
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        'x-goog-api-key': apiKey
+      },
+      body: JSON.stringify(body),
+      signal
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      return { errorText: errorText || response.statusText, status: response.status, statusText: response.statusText };
+    }
+
+    const data = await response.json();
+    if (data?.error?.message) {
+      return { errorText: data.error.message };
+    }
+
+    return { data };
+  };
+
+  const firstResult = await fetchWithConfig(imageConfig);
+  if (firstResult.data) {
+    return firstResult.data;
   }
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-      'x-goog-api-key': apiKey
-    },
-    body: JSON.stringify(body),
-    signal
-  });
+  if (shouldRetryWithoutOutputMimeType(imageConfig, firstResult.errorText || '')) {
+    const retryResult = await fetchWithConfig(withoutOutputMimeType(imageConfig));
+    if (retryResult.data) {
+      return retryResult.data;
+    }
 
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => '');
+    if (retryResult.status) {
+      throw new ImageProcessingError(
+        `Gemini proxy error (${retryResult.status}): ${retryResult.errorText || retryResult.statusText}`
+      );
+    }
+
+    throw new ImageProcessingError(`Gemini proxy error: ${retryResult.errorText}`);
+  }
+
+  if (firstResult.status) {
     throw new ImageProcessingError(
-      `Gemini proxy error (${response.status}): ${errorText || response.statusText}`
+      `Gemini proxy error (${firstResult.status}): ${firstResult.errorText || firstResult.statusText}`
     );
   }
 
-  const data = await response.json();
-  if (data?.error?.message) {
-    throw new ImageProcessingError(`Gemini proxy error: ${data.error.message}`);
-  }
-
-  return data;
+  throw new ImageProcessingError(`Gemini proxy error: ${firstResult.errorText}`);
 }
 
 function delay(ms: number): Promise<void> {
@@ -328,6 +384,7 @@ ${prompt}`;
   interface ImageConfig extends Record<string, unknown> {
     aspectRatio?: string;
     imageSize?: string;
+    outputMimeType?: string;
   }
 
   const imageConfig: ImageConfig = {};
@@ -341,6 +398,10 @@ ${prompt}`;
   // Pro model supports 1K, 2K, and 4K resolutions
   if (settings.resolution === '1K' || settings.resolution === '2K' || settings.resolution === '4K') {
     imageConfig.imageSize = settings.resolution;
+  }
+
+  if (useProxy && shouldRequestPngOutput(proxyBaseUrl)) {
+    imageConfig.outputMimeType = 'image/png';
   }
 
   const config = Object.keys(imageConfig).length > 0 ? { imageConfig } : undefined;
